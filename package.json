@@ -1,0 +1,25 @@
+{
+  "name": "poc-multi-env-tenant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PoC: multi-tenancy (bridge model) + multi-environment with NestJS",
+  "scripts": {
+    "build": "turbo build",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "lint": "turbo lint",
+    "format": "turbo format",
+    "dev": "pnpm --filter api start:dev",
+    "web-dev": "pnpm --filter web dev",
+    "seed": "pnpm --filter api seed",
+    "dev:tilt": "tilt up",
+    "dev:tilt:down": "tilt down"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.16"
+  },
+  "packageManager": "pnpm@10.24.0",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
