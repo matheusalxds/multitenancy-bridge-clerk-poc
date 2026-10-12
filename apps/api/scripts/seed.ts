@@ -191,6 +191,8 @@ for (const [tenantId, loanApplications] of Object.entries(
   });
   await tenantDb.collection('loanApplications').deleteMany({});
   await tenantDb.collection('loanApplications').insertMany(loanApplications);
+  await tenantDb.collection('loans').drop().catch(() => undefined);
+  await tenantDb.collection('users').drop().catch(() => undefined);
   console.log(
     `[seed] ${env.TENANT_DB_PREFIX}${tenantId}.loanApplications: ${loanApplications.length} documents`,
   );

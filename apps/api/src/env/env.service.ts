@@ -33,4 +33,8 @@ export class EnvService {
   get clerkJwtKey(): string | undefined {
     return this.configService.get('CLERK_JWT_KEY', { infer: true });
   }
+
+  get adminToken(): string | undefined {
+    return this.configService.get('ADMIN_TOKEN', { infer: true });
+  }
 }

@@ -2,7 +2,7 @@ import type { Connection } from 'mongoose';
 import { describe, expect, it } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
-import { MissingTenantHeaderError } from '../common/domain-errors.js';
+import { TenantContextMissingError } from '../common/domain-errors.js';
 import type { EnvService } from '../env/env.service.js';
 import { TenantConnectionService } from './tenant-connection.service.js';
 
@@ -30,10 +30,10 @@ describe('TenantConnectionService', () => {
       });
     });
 
-    it('should throw MissingTenantHeaderError when the request has no tenantId', () => {
+    it('should throw TenantContextMissingError when the request has no tenantId', () => {
       const { service, connection } = makeService();
 
-      expect(() => service.getTenantDb()).toThrow(MissingTenantHeaderError);
+      expect(() => service.getTenantDb()).toThrow(TenantContextMissingError);
       expect(connection.useDb).not.toHaveBeenCalled();
     });
   });

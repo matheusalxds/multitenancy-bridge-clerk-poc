@@ -22,6 +22,23 @@ const TENANTS = [
   },
 ];
 
+const USERS = [
+  {
+    clerkUserId: 'user_test_acme',
+    tenantId: 'acme',
+    email: 'alice@acme.com',
+    name: 'Alice Anderson',
+    role: 'member',
+  },
+  {
+    clerkUserId: 'user_test_xyz',
+    tenantId: 'xyz',
+    email: 'xavier@xyz.com',
+    name: 'Xavier Xu',
+    role: 'member',
+  },
+];
+
 describe('Loan applications multi-tenancy with Clerk claims (e2e)', () => {
   let app: INestApplication<App>;
   let connection: Connection;
@@ -29,7 +46,7 @@ describe('Loan applications multi-tenancy with Clerk claims (e2e)', () => {
 
   async function signToken(
     orgId: string | undefined,
-    sub = 'user_test_1',
+    sub = orgId === 'org_test_xyz' ? 'user_test_xyz' : 'user_test_acme',
   ): Promise<string> {
     const jwt = new SignJWT(orgId ? { o: { id: orgId } } : {})
       .setProtectedHeader({ alg: 'RS256' })
@@ -77,6 +94,8 @@ describe('Loan applications multi-tenancy with Clerk claims (e2e)', () => {
     const platformDb = connection.useDb('platform_test', { useCache: true });
     await platformDb.collection('tenants').deleteMany({});
     await platformDb.collection('tenants').insertMany(structuredClone(TENANTS));
+    await platformDb.collection('users').deleteMany({});
+    await platformDb.collection('users').insertMany(structuredClone(USERS));
   });
 
   afterAll(async () => {
@@ -135,6 +154,30 @@ describe('Loan applications multi-tenancy with Clerk claims (e2e)', () => {
         .expect(403);
 
       expect(response.body.error.code).toBe('TENANT_NOT_REGISTERED');
+    });
+  });
+
+  describe('user provisioning', () => {
+    it('should return 403 when the user has no document in platform.users', async () => {
+      const token = await signToken('org_test_acme', 'user_test_ghost');
+
+      const response = await api()
+        .get('/loan-applications')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(403);
+
+      expect(response.body.error.code).toBe('USER_NOT_PROVISIONED');
+    });
+
+    it('should return 403 when the user document belongs to another tenant', async () => {
+      const token = await signToken('org_test_acme', 'user_test_xyz');
+
+      const response = await api()
+        .get('/loan-applications')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(403);
+
+      expect(response.body.error.code).toBe('USER_NOT_PROVISIONED');
     });
   });
 

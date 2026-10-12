@@ -8,7 +8,9 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { AdminTokenGuard } from '../auth/admin-token.guard.js';
 import { Public } from '../auth/public.decorator.js';
 import { CreateTenantDto, UpdateTenantDto } from './dto/create-tenant.dto.js';
 import type { Tenant } from './tenant.schema.js';
@@ -16,6 +18,7 @@ import { TenantsService } from './tenants.service.js';
 
 @Controller('tenants')
 @Public()
+@UseGuards(AdminTokenGuard)
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 

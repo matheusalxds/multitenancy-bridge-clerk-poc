@@ -9,10 +9,11 @@ import type { Response } from 'express';
 import {
   DomainError,
   EntityNotFoundError,
-  MissingTenantHeaderError,
+  TenantContextMissingError,
   TenantMismatchError,
   TenantNotRegisteredError,
   UnauthenticatedError,
+  UserNotProvisionedError,
 } from './domain-errors.js';
 
 @Catch()
@@ -61,13 +62,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (
       exception instanceof TenantMismatchError ||
-      exception instanceof TenantNotRegisteredError
+      exception instanceof TenantNotRegisteredError ||
+      exception instanceof UserNotProvisionedError
     ) {
       return HttpStatus.FORBIDDEN;
     }
 
-    if (exception instanceof MissingTenantHeaderError) {
-      return HttpStatus.BAD_REQUEST;
+    if (exception instanceof TenantContextMissingError) {
+      return HttpStatus.INTERNAL_SERVER_ERROR;
     }
 
     return HttpStatus.UNPROCESSABLE_ENTITY;

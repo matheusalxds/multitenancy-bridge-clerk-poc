@@ -7,8 +7,10 @@ import {
   TenantMismatchError,
   TenantNotRegisteredError,
   UnauthenticatedError,
+  UserNotProvisionedError,
 } from '../common/domain-errors.js';
 import type { TenantsService } from '../tenants/tenants.service.js';
+import type { UsersService } from '../users/users.service.js';
 import type { AuthenticatedRequest } from './authenticated-request.js';
 import { ClerkAuthGuard } from './clerk-auth.guard.js';
 import type { TokenVerifierService } from './token-verifier.service.js';
@@ -35,10 +37,21 @@ function makeTenantParams() {
   };
 }
 
+function makeUserParams() {
+  return {
+    clerkUserId: 'user_1',
+    tenantId: 'acme',
+    email: 'alice@acme.com',
+    name: 'Alice Anderson',
+    role: 'member' as const,
+  };
+}
+
 describe('ClerkAuthGuard', () => {
   let reflector: MockProxy<Reflector>;
   let tokenVerifier: MockProxy<TokenVerifierService>;
   let tenantsService: MockProxy<TenantsService>;
+  let usersService: MockProxy<UsersService>;
   let guard: ClerkAuthGuard;
 
   beforeEach(() => {
@@ -46,7 +59,14 @@ describe('ClerkAuthGuard', () => {
     reflector.getAllAndOverride.mockReturnValue(false);
     tokenVerifier = mock<TokenVerifierService>();
     tenantsService = mock<TenantsService>();
-    guard = new ClerkAuthGuard(reflector, tokenVerifier, tenantsService);
+    usersService = mock<UsersService>();
+    usersService.findByClerkUserId.mockResolvedValue(makeUserParams());
+    guard = new ClerkAuthGuard(
+      reflector,
+      tokenVerifier,
+      tenantsService,
+      usersService,
+    );
   });
 
   it('should allow public routes without a token', async () => {
@@ -125,6 +145,37 @@ describe('ClerkAuthGuard', () => {
 
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
       TenantMismatchError,
+    );
+  });
+
+  it('should throw UserNotProvisionedError when the user has no platform document', async () => {
+    tokenVerifier.verify.mockResolvedValue({
+      sub: 'user_1',
+      o: { id: 'org_acme' },
+    });
+    tenantsService.findByClerkOrgId.mockResolvedValue(makeTenantParams());
+    usersService.findByClerkUserId.mockResolvedValue(null);
+    const { context } = makeContext({ authorization: 'Bearer valid' });
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UserNotProvisionedError,
+    );
+  });
+
+  it('should throw UserNotProvisionedError when the user belongs to another tenant', async () => {
+    tokenVerifier.verify.mockResolvedValue({
+      sub: 'user_1',
+      o: { id: 'org_acme' },
+    });
+    tenantsService.findByClerkOrgId.mockResolvedValue(makeTenantParams());
+    usersService.findByClerkUserId.mockResolvedValue({
+      ...makeUserParams(),
+      tenantId: 'xyz',
+    });
+    const { context } = makeContext({ authorization: 'Bearer valid' });
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UserNotProvisionedError,
     );
   });
 

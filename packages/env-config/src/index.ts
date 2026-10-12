@@ -14,6 +14,7 @@ export const apiEnvSchema = envSchema
   .extend({
     CLERK_SECRET_KEY: z.string().min(1).optional(),
     CLERK_JWT_KEY: z.string().min(1).optional(),
+    ADMIN_TOKEN: z.string().min(16).optional(),
   })
   .superRefine((env, ctx) => {
     if (!env.CLERK_SECRET_KEY && !env.CLERK_JWT_KEY) {

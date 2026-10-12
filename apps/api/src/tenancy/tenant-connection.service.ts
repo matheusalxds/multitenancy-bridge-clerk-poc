@@ -2,7 +2,7 @@ import { Inject, Injectable, Scope } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import type { Connection, Model, Schema } from 'mongoose';
 import type { AuthenticatedRequest } from '../auth/authenticated-request.js';
-import { MissingTenantHeaderError } from '../common/domain-errors.js';
+import { TenantContextMissingError } from '../common/domain-errors.js';
 import { MONGO_CONNECTION } from '../database/database.module.js';
 import { EnvService } from '../env/env.service.js';
 
@@ -18,7 +18,7 @@ export class TenantConnectionService {
     const { tenantId } = this.request;
 
     if (!tenantId) {
-      throw new MissingTenantHeaderError();
+      throw new TenantContextMissingError();
     }
 
     return this.connection.useDb(`${this.env.tenantDbPrefix}${tenantId}`, {

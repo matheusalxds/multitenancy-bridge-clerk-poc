@@ -17,7 +17,7 @@ pnpm workspaces + Turborepo:
 Key pieces in `apps/api/src`:
 
 - `auth/clerk-auth.guard.ts`: global guard; verifies the Bearer token with `@clerk/backend` (`verifyToken`, networkless with `CLERK_JWT_KEY` or cached JWKS with `CLERK_SECRET_KEY`), reads `org_id`/`sub` only after verification, resolves org → tenant through the `tenants` registry (cached 60s), rejects client-declared tenant mismatches (403) and attaches `{ tenantId, userId }` to the request. Routes opt out with `@Public()`.
-- `tenants/`: tenant CRUD on the shared `platform` database; schema `{ tenantId, clerkOrgId (unique), name, status }`. This is the registry mapping Clerk organizations to tenant databases. Public in this PoC (admin surface, auth for it is out of scope).
+- `tenants/`: tenant CRUD on the shared `platform` database; schema `{ tenantId, clerkOrgId (unique), name, status }`. This is the registry mapping Clerk organizations to tenant databases. It is an admin-only surface: every route requires an `x-admin-token` header compared in constant time against the `ADMIN_TOKEN` env var, and with no `ADMIN_TOKEN` set the surface is fully locked (fail closed). The seed writes directly to Mongo, so nothing in the PoC depends on this API being open. In a real system this would sit behind proper operator auth; the static token stands in for that.
 - `users/`: platform users on the `platform` database, `{ clerkUserId (unique), tenantId, email, name, role }`; `GET /users/me` resolves the caller by the verified `sub` claim.
 - `tenancy/tenant-connection.service.ts`: request-scoped; resolves the tenant database handle from the request (never from module/global state) and caches Mongoose models per database.
 - `loan-applications/`: sample CRUD whose queries have no `tenantId` anywhere.
@@ -40,7 +40,7 @@ Then make sure the keys land in the gitignored files (`clerk init` may write the
 
 If the instance was created blank (no identifiers), enable email + password once: `clerk config patch --json '{"auth_email":{"used_for_sign_in":true,"used_for_sign_up":true,"required_for_sign_up":true,"verify_at_sign_up":true,"sign_in_strategies":[],"verification_strategies":["email_code"]},"auth_password":{"enabled":true,"required":true,"min_length":8,"device_trust":{"enabled":false}}}' --yes`. Two traps for the seeded fake emails, both dead ends since they cannot receive codes: `sign_in_strategies` must stay empty (with `email_code` there, the sign-in component offers a one-time code by email as a login factor) and `device_trust` must be disabled (it demands an email code on every sign-in from a new device, even with the right password).
 
-Finally run `pnpm seed`. It prints the web test logins at the end (`alice@acme.com` and `xavier@xyz.com`, password `Poc-Bridge-2026-Strong!`). The test organizations and users exist only in your own dev instance and only after the seed runs; they are disposable, and re-running the seed is idempotent (it recreates anything deleted and re-registers the returned ids in Mongo). A new tenant is data, not configuration: create the org in Clerk, insert its document in `platform.tenants`, zero env changes, zero redeploys.
+Finally run `pnpm seed`. It prints the web test logins at the end (`alice@acme.com` and `xavier@xyz.com`, password `Poc-Bridge-2026-Strong!`). The Clerk instance is dev-only and the password is throwaway: the test organizations and users exist only in your own dev instance and only after the seed runs; they are disposable, and re-running the seed is idempotent (it recreates anything deleted and re-registers the returned ids in Mongo). A new tenant is data, not configuration: create the org in Clerk, insert its document in `platform.tenants`, zero env changes, zero redeploys.
 
 ## How to run
 
@@ -59,7 +59,8 @@ Useful manual probes:
 curl localhost:3000/loan-applications                         # 401 UNAUTHENTICATED
 curl -H "Authorization: Bearer $TOKEN" localhost:3000/loan-applications
 curl -H "Authorization: Bearer $TOKEN" -H "x-tenant-id: other" localhost:3000/loan-applications   # 403 TENANT_MISMATCH
-curl localhost:3000/tenants                                   # public registry (PoC admin surface)
+curl localhost:3000/tenants                                   # 401 without x-admin-token
+curl -H "x-admin-token: $ADMIN_TOKEN" localhost:3000/tenants  # admin-only registry
 ```
 
 To run pieces without Tilt: `pnpm dev` (API), `pnpm web-dev` (web). Re-seed anytime with `pnpm seed`.
@@ -71,7 +72,7 @@ pnpm test        # unit suites (no Mongo needed)
 pnpm test:e2e    # needs the Tilt Mongo up; uses .env.test (platform_test / test_tenant_*)
 ```
 
-The e2e suite signs real RS256 JWTs with a throwaway key pair generated per run and hands the public key to the API via `CLERK_JWT_KEY`, so signature verification is real (nothing is mocked at the verification point). It covers: 401 for missing/tampered/expired tokens and tokens without `org_id`; 403 for unregistered orgs; 403 when a header or query param declares a tenant different from the claim (claim is the only authority); per-tenant listing; cross-tenant fetch by id returning 404 (not 403); documents stored without any tenant field; 40 interleaved parallel requests with zero cross-tenant leakage; and boot failing with a clear Zod error on incomplete env.
+The e2e suite signs real RS256 JWTs with a throwaway key pair generated per run and hands the public key to the API via `CLERK_JWT_KEY`, so signature verification is real (nothing is mocked at the verification point). It covers: 401 for missing/tampered/expired tokens and tokens without an organization claim; 403 for unregistered orgs; 403 for authenticated users with no document in `platform.users` or a document pointing at another tenant (provisioning check); 403 when a header or query param declares a tenant different from the claim (claim is the only authority); per-tenant listing; cross-tenant fetch by id returning 404 (not 403); documents stored without any tenant field; 40 interleaved parallel requests with zero cross-tenant leakage; the tenants admin surface rejecting reads and writes without the right `x-admin-token`; and boot failing with a clear Zod error on incomplete env. E2e files run serially (`fileParallelism: false`) because they share the test Mongo.
 
 ## What the PoC proved
 

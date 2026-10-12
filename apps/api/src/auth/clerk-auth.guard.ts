@@ -8,8 +8,10 @@ import {
   TenantMismatchError,
   TenantNotRegisteredError,
   UnauthenticatedError,
+  UserNotProvisionedError,
 } from '../common/domain-errors.js';
 import { TenantsService } from '../tenants/tenants.service.js';
+import { UsersService } from '../users/users.service.js';
 import type { AuthenticatedRequest } from './authenticated-request.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { TokenVerifierService } from './token-verifier.service.js';
@@ -20,6 +22,7 @@ export class ClerkAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokenVerifier: TokenVerifierService,
     private readonly tenantsService: TenantsService,
+    private readonly usersService: UsersService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -59,6 +62,12 @@ export class ClerkAuthGuard implements CanActivate {
     }
 
     this.rejectClientDeclaredTenantMismatch(request, tenant.tenantId);
+
+    const user = await this.usersService.findByClerkUserId(claims.sub);
+
+    if (!user || user.tenantId !== tenant.tenantId) {
+      throw new UserNotProvisionedError(claims.sub);
+    }
 
     request.tenantId = tenant.tenantId;
     request.userId = claims.sub;

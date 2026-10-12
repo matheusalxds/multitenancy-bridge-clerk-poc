@@ -14,9 +14,12 @@ export class EntityNotFoundError extends DomainError {
   }
 }
 
-export class MissingTenantHeaderError extends DomainError {
+export class TenantContextMissingError extends DomainError {
   constructor() {
-    super('x-tenant-id header is required', 'TENANT_HEADER_MISSING');
+    super(
+      'tenant context was not resolved before data access (auth guard did not run)',
+      'TENANT_CONTEXT_MISSING',
+    );
   }
 }
 
@@ -33,6 +36,15 @@ export class TenantMismatchError extends DomainError {
     super(
       'Client-declared tenant does not match the authenticated organization',
       'TENANT_MISMATCH',
+    );
+  }
+}
+
+export class UserNotProvisionedError extends DomainError {
+  constructor(clerkUserId: string) {
+    super(
+      `User "${clerkUserId}" is not provisioned for this tenant`,
+      'USER_NOT_PROVISIONED',
     );
   }
 }
